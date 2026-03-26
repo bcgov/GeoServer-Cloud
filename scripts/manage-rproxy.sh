@@ -5,7 +5,7 @@ set -euo pipefail
 # Config
 # ----------------------------
 APP="ogs-rproxy"
-REPO="https://github.com/vcschuni/ogs-public.git"
+REPO="https://github.com/bcgov/GeoServer-Cloud.git"
 
 # ----------------------------
 # Verify passed arg and show help if required
