@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ogs-postgresql-cluster-init-sql
+  labels:
+    app: ogs-postgresql-cluster
+data:
+  init.sql: |
+    -- Run against the gisdata database
+    \c gisdata
+
+    -- Extensions
+    CREATE EXTENSION IF NOT EXISTS postgis;
+    CREATE EXTENSION IF NOT EXISTS hstore;
+
+    -- Read-only user
+    GRANT CONNECT ON DATABASE gisdata TO "ogs-ro-user";
+    GRANT USAGE ON SCHEMA public TO "ogs-ro-user";
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO "ogs-ro-user";
+
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT ON TABLES TO "ogs-ro-user";
+
+    -- Read-write user
+    GRANT CONNECT ON DATABASE gisdata TO "ogs-rw-user";
+    GRANT USAGE ON SCHEMA public TO "ogs-rw-user";
+    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "ogs-rw-user";
+
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "ogs-rw-user";
+
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO "ogs-rw-user";
+    
+    -- Run against the ogs_configuration database
+    \c ogs_configuration
+    
+    GRANT ALL PRIVILEGES ON DATABASE ogs_configuration TO "ogs-config-user";
+    GRANT ALL PRIVILEGES ON SCHEMA public TO "ogs-config-user";
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "ogs-config-user";
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "ogs-config-user";
+    GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO "ogs-config-user";
+
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT ALL PRIVILEGES ON TABLES TO "ogs-config-user";
+
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT ALL PRIVILEGES ON SEQUENCES TO "ogs-config-user";
+
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT ALL PRIVILEGES ON FUNCTIONS TO "ogs-config-user";
