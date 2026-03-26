@@ -1,6 +1,6 @@
-# Public Facing Spatial Service (OGS-Public)
+# GeoServer Cloud (Public)
 
-This repository contains the required components to build a **Public Facing Spatial Service** on the BCGov OpenShift Environment.
+This repository contains the required components to build a **Public Facing Spatial Service** using GeoServer Cloud, PostgreSQL, and PostGIS on the BCGov OpenShift Environment.
 
 ## Architecture
 #### Technology Stack:
