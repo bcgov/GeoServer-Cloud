@@ -31,8 +31,8 @@ GeoServer Cloud (Public) provides a scalable, cloud-native platform for serving 
 
 #### 1. Clone the repo:
 ```bash
-git clone https://github.com/vcschuni/ogs-public.git
-cd ogs-public
+git clone https://github.com/vcschuni/Geoserver-Cloud.git
+cd Geoserver-Cloud
 ```
 
 #### 2. Login to OpenShift Cluster & Set the Project:
@@ -176,22 +176,6 @@ User account details are available as secrets within:
 - The database backup cronjob writes its database dump files to PgAdmin's Persistent Volume Claim (PVC).
 - The PgAdmin deployment is not required for normal operation, but is useful for database management and backup retrieval.
 - The database backup cronjob can be disabled by removing the ogs-cronjob-schedules secret.
-
-## Tips & Tricks
-
-- To scale down all deployments (for cost savings):
-  ```bash
-  oc scale deployment --replicas=0 -l app.kubernetes.io/part-of=ogs-public
-  ```
-- To scale back up, set `--replicas` to the desired number.
-- To remove all deployments and resources, use the `remove` action in the management scripts.
-- To check logs for troubleshooting:
-  ```bash
-  oc logs deployment/<deployment-name>
-  ```
-- If you encounter permission errors, verify your OpenShift user role and project context.
-- For secret or PVC issues, ensure the resources exist and are correctly referenced in your deployment YAML.
-- Use PgAdmin's Storage Manager to view or download backups.
 
 ## Removal / Cleanup
 
