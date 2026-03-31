@@ -1,30 +1,33 @@
+
 # GeoServer Cloud (Public)
 
-This repository contains the required components to build a **Public Facing Spatial Service** using GeoServer Cloud, PostgreSQL, and PostGIS on the BCGov OpenShift Environment.
+## Project Overview
+GeoServer Cloud (Public) provides a scalable, cloud-native platform for serving and managing geospatial data using GeoServer Cloud, PostgreSQL/PostGIS, and supporting tools. Designed for deployment on the BCGov OpenShift Environment, it enables secure, high-performance spatial data services for public and internal use.
 
 ## Architecture
 #### Technology Stack:
-- **Nginx**: a rate limiting and caching reverse proxy exposed externally for GeoServer and PGAdmin Web.
-- **GeoServer Cloud**: high performance server for transforming and sharing geospatial data.
-- **PostgreSQL / PostGIS (via Crunchy)**: a powerful clustered object-relational database system enabled with geospatial functionality.
-- **RabbitMQ**: a message broker that allows individual GeoServer Cloud microservices to communicate with each other.
-- **PGAdmin Web**: a monitoring and management tool for PostgreSQL databases [optional].
+- **Nginx**: An externally exposed reverse proxy providing rate limiting and caching in front of GeoServer.
+- **GeoServer Cloud**: A high-performance platform for transforming and sharing geospatial data.
+- **PostgreSQL / PostGIS (via Crunchy)**: A robust, clustered object-relational database system with advanced geospatial capabilities.
+- **RabbitMQ**: A message broker facilitating communication between GeoServer Cloud microservices.
+- **PGAdmin Web**: An optional web-based tool for monitoring and managing PostgreSQL databases.
 
 #### Databases:
-- **ogs_configuration**: a database that stores GeoServer Cloud configuration.  Each GeoServer microservice (webui, wfs, etc) connects to it.
-- **gisdata**: a database that stores all your geospatial data.
+- **ogs_configuration**: Central configuration database for GeoServer Cloud. All microservices (e.g., webui, wfs) connect here for shared settings and service discovery.
+- **gisdata**: Primary geospatial data store. Contains all spatial datasets managed and served by GeoServer Cloud.
 
 #### Database User Accounts:
-- **postgres**: the superuser for administering the postgresql cluster
-- **ogs-config-user**: the user that GeoServer Cloud uses to connect to the ogs_configuration database.
-- **ogs-ro-user**: a read-only user for the gisdata database.
-- **ogs-rw-user**: a read-write user for the gisdata database.
+- **postgres**: Superuser for administering the PostgreSQL cluster.
+- **ogs-config-user**: Application user for GeoServer Cloud to access the ogs_configuration database.
+- **ogs-ro-user**: Read-only user for accessing data in the gisdata database.
+- **ogs-rw-user**: Read-write user for managing and updating data in the gisdata database.
 
 ## Build/Deployment
 #### Requirements:
-- Shell environment via native linux or WSL
-- Git Version Control (https://git-scm.com/install/)
-- OpenShift CLI (https://developers.redhat.com/learning/learn:openshift:download-and-install-red-hat-openshift-cli/resource/resources:download-and-install-oc)
+- Shell environment via native Linux or WSL
+- Git Version Control ([git-scm.com](https://git-scm.com/install/))
+- OpenShift CLI ([download instructions](https://developers.redhat.com/learning/learn:openshift:download-and-install-red-hat-openshift-cli/resource/resources:download-and-install-oc))
+  - Ensure your user account has sufficient permissions to create secrets, deploy workloads, and manage PVCs.
 
 #### 1. Clone the repo:
 ```bash
@@ -40,7 +43,7 @@ oc project <your-project-id>
 
 #### 3. Add Secrets:
 ```bash
-# Create GeoServer Secrets
+# Create GeoServer Secrets (use strong, unique passwords)
 oc create secret generic ogs-geoserver \
   --from-literal=GEOSERVER_ADMIN_USER=admin \
   --from-literal=GEOSERVER_ADMIN_PASSWORD=***password***
@@ -49,7 +52,7 @@ oc create secret generic ogs-geoserver \
 oc create secret generic ogs-rabbitmq \
   --from-literal=RABBITMQ_DEFAULT_USER=admin \
   --from-literal=RABBITMQ_DEFAULT_PASS=***password***
-  
+
 # Create the CronJob Schedule (optional)
 oc create secret generic ogs-cronjob-schedules \
   --from-literal=db_backup="0 6,18 * * *"
@@ -106,8 +109,7 @@ or in one swoop:
 ## * Optional (in TOOLS Project) *
 
 #### 1. Create NetworkPolicies:
-
-In each project (i.e. abc123-dev, abc123-test, or abc123-prod) that you want PgAdmin and the DB Backup CronJobs to have access to, apply the following YAML to create a NetworkPolicy.  You will need to replace [tools-project-id] with the name of your tools project (i.e. abc123-tools).
+To allow PgAdmin and the DB Backup CronJobs to access the database, apply the following YAML in each project (e.g., abc123-dev, abc123-test, or abc123-prod). Replace `[tools-project-id]` with your tools project name (e.g., abc123-tools).
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -129,39 +131,39 @@ spec:
     - protocol: TCP
       port: 5432
 ```
+> **Note:** NetworkPolicies restrict access to your database pods. Only allow trusted namespaces.
 
 #### 2. Switch to Tools Project:
-
-```bash	
+```bash
 oc project <tools-project-id>
 ```
 
-#### 4. Add Secrets:
-```bash	
+#### 3. Add Secrets (use strong, unique passwords):
+```bash
 oc create secret generic ogs-pgadmin \
   --from-literal=PGADMIN_EMAIL=admin@example.com \
   --from-literal=PGADMIN_PASSWORD=***password***
 ```
 
-#### 5. Deploy PgAdmin:
-```bash	
+#### 4. Deploy PgAdmin:
+```bash
 ./scripts/manage-pgadmin.sh deploy
-	- Review and confirm with 'Y'
+  - Review and confirm with 'Y'
 ```
-#### 6. Deploy Database Backup CronJobs per Project
 
+#### 5. Deploy Database Backup CronJobs per Project
 Replace [target-project-id] with the name of your Project you wish to run the database backup for (i.e. abc123-dev, abc123-test, or abc123-prod). Requires ogs-cronjob-schedules secret in each target project.
-```bash		
+```bash
 ./scripts/manage-cronjob-db-backup.sh deploy [target-project-id]
-	- Review and confirm with 'Y'
+  - Review and confirm with 'Y'
 ```
 
 ## Start adding tables, data, layers, security, etc.
 
 The following endpoints are available to build your own custom setup:
-- GeoServer WebUi: <a href="https://ogs-${PROJ}.apps.silver.devops.gov.bc.ca/">https://ogs-[project-name].apps.silver.devops.gov.bc.ca/</a>
-- RabbitMQ Management:<a href="https://ogs-${PROJ}.apps.silver.devops.gov.bc.ca/rabbitmq/">https://ogs-[project-name].apps.silver.devops.gov.bc.ca/rabbitmq/</a>
-- PgAdmin Web:<a href="https://ogs-${PROJ}.apps.silver.devops.gov.bc.ca/pgadmin/">https://ogs-[tools-project-name].apps.silver.devops.gov.bc.ca/pgadmin/</a>
+- **GeoServer Web UI:** `https://ogs-[project-name].apps.silver.devops.gov.bc.ca/`
+- **RabbitMQ Management:** `https://ogs-[project-name].apps.silver.devops.gov.bc.ca/rabbitmq/`
+- **PgAdmin Web:** `https://ogs-[tools-project-name].apps.silver.devops.gov.bc.ca/pgadmin/`
 
 User account details are available as secrets within:
 - ogs-postgresql-cluster-pguser-ogs-ro-user
@@ -170,35 +172,49 @@ User account details are available as secrets within:
 
 ## Notes
 
-- Deployment order is critical as some components rely on the existence of resources created by other components.
-- The database backup cronjob writes it's database dump files to PgAdmin's PVC.
+- Deployment order is critical, as some components rely on resources created by others.
+- The database backup cronjob writes its database dump files to PgAdmin's Persistent Volume Claim (PVC).
+- The PgAdmin deployment is not required for normal operation, but is useful for database management and backup retrieval.
+- The database backup cronjob can be disabled by removing the ogs-cronjob-schedules secret.
 
 ## Tips & Tricks
 
-- Scale the ogs-geoserver-webui & ogs-pgadmin deployments to 0 pods when not in use.  This improves security and reduces resource usage. 
-- Use PgAdmin's Storage Manager to view/download backups. 
+- To scale down all deployments (for cost savings):
+  ```bash
+  oc scale deployment --replicas=0 -l app.kubernetes.io/part-of=ogs-public
+  ```
+- To scale back up, set `--replicas` to the desired number.
+- To remove all deployments and resources, use the `remove` action in the management scripts.
+- To check logs for troubleshooting:
+  ```bash
+  oc logs deployment/<deployment-name>
+  ```
+- If you encounter permission errors, verify your OpenShift user role and project context.
+- For secret or PVC issues, ensure the resources exist and are correctly referenced in your deployment YAML.
+- Use PgAdmin's Storage Manager to view or download backups.
 
 ## Removal / Cleanup
-To remove the database cluster, deployments, builds, etc. built and deployed above:
 
 *** WARNING:  YOU WILL LOSE DATA ***
 
-```bash
-./scripts/manage-geoserver.sh remove
-	- Review and confirm with 'Y'
-	
-./scripts/manage-rabbitmq.sh remove
-	- Review and confirm with 'Y'
-	
-./scripts/manage-pgadmin.sh remove
-	- Review and confirm with 'Y'
-	
-./scripts/manage-rproxy.sh remove
-	- Review and confirm with 'Y'
+- To remove all GeoServer Cloud components:
+  ```bash
+  ./scripts/manage-geoserver.sh remove
+  ./scripts/manage-rproxy.sh remove
+  # Confirm removal when prompted
+  ```
+- To remove the Crunchy PostgreSQL cluster:
+  ```bash
+  oc delete -f k8s/postgres/cluster.yaml
+  oc delete -f k8s/postgres/cluster-init.yaml
+  ```
+- Delete remaining PVCs as required (this will delete all data!):
+  ```bash
+  oc delete pvc --all
+  ```
+- **Warning:** Removing PVCs will permanently delete all database and backup data.
 
-oc delete postgrescluster ogs-postgresql-cluster
-oc delete all,configmap,secret,pvc -l app=ogs-postgresql-cluster
+# License
 
-Delete remaining PVC's as required
-```
+This project is licensed under the terms of the [LICENSE](LICENSE) file in this repository.
 
