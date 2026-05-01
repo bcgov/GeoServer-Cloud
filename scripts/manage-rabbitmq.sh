@@ -84,7 +84,7 @@ oc set env deployment/"${APP}" \
 # ----------------------------
 # Set resources (optional)
 # ----------------------------
-oc set resources deployment/"${APP}" --limits=cpu=1,memory=1Gi --requests=cpu=500m,memory=512Mi
+oc set resources deployment/"${APP}" --limits=cpu=500m,memory=512Mi --requests=cpu=250m,memory=256Mi
 oc autoscale deployment/"${APP}" --min=1 --max=1 --cpu-percent=100
 
 # ----------------------------

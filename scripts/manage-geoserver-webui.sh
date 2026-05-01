@@ -105,7 +105,7 @@ oc set env deployment/"${APP}" \
 # ----------------------------
 # Set resources
 # ----------------------------
-oc set resources deployment/"${APP}" --limits=cpu=1,memory=1.25Gi --requests=cpu=200m,memory=1Gi
+oc set resources deployment/"${APP}" --limits=cpu=300m,memory=1.25Gi --requests=cpu=150m,memory=1Gi
 
 # ----------------------------
 # Rollout

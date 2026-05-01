@@ -111,8 +111,8 @@ oc label deployment "${APP}" app="${APP}" --overwrite
 # ----------------------------
 # Set resources and autoscaler
 # ----------------------------
-oc set resources deployment/"${APP}" --limits=cpu=750m,memory=512Mi --requests=cpu=250m,memory=256Mi
-oc autoscale deployment/"${APP}" --min=1 --max=2 --cpu-percent=65
+oc set resources deployment/"${APP}" --limits=cpu=300m,memory=512Mi --requests=cpu=150m,memory=256Mi
+oc autoscale deployment/"${APP}" --min=2 --max=3 --cpu-percent=75
 
 # ----------------------------
 # Rollout
