@@ -215,9 +215,6 @@ if ! oc get route "${APP}" &>/dev/null; then
       }
     }
   }'
-
-  echo ">>> Restricting route to BC Gov VPN IPs (142.34.0.0/16, 142.35.0.0/16)..."
-  oc annotate route "${APP}" haproxy.router.openshift.io/ip_whitelist="142.34.0.0/16,142.35.0.0/16" --overwrite
 fi
 
 # ----------------------------
