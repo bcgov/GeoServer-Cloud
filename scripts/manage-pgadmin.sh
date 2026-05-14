@@ -40,6 +40,9 @@ echo " Action:            ${ACTION}"
 echo " App:               ${APP}"
 echo " Project:           ${PROJ}"
 echo " Service Hostname:  ${SERVICE_HOSTNAME}"
+echo " Note:              This script should only"
+echo "                    be executed in the TOOLS"
+echo "                    namespace"
 echo "========================================"
 echo
 read -r -p "Continue? [y/N]: " CONFIRM
@@ -212,8 +215,10 @@ if ! oc get route "${APP}" &>/dev/null; then
       }
     }
   }'
-fi
 
+  echo ">>> Restricting route to BC Gov VPN IPs (142.34.0.0/16, 142.35.0.0/16)..."
+  oc annotate route "${APP}" haproxy.router.openshift.io/ip_whitelist="142.34.0.0/16,142.35.0.0/16" --overwrite
+fi
 
 # ----------------------------
 # Cleanup builds
