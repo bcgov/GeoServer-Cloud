@@ -147,14 +147,14 @@ oc create secret generic ogs-pgadmin \
 
 #### 4. Deploy PgAdmin:
 ```bash
-./scripts/manage-pgadmin.sh deploy
+./scripts/manage-tools-pgadmin.sh deploy
   - Review and confirm with 'Y'
 ```
 
 #### 5. Deploy Database Backup CronJobs per Project
 Replace [target-project-id] with the name of your Project you wish to run the database backup for (i.e. abc123-dev, abc123-test, or abc123-prod). Requires ogs-cronjob-schedules secret in each target project.
 ```bash
-./scripts/manage-cronjob-db-backup.sh deploy [target-project-id]
+./scripts/manage-tools-cronjob-db-backup.sh deploy [target-project-id]
   - Review and confirm with 'Y'
 ```
 
