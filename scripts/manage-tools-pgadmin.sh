@@ -130,7 +130,7 @@ oc import-image debian:trixie-slim \
 echo ">>> Creating/updating BuildConfig..."
 oc new-build "$REPO" \
 	--name="${APP}" \
-	--context-dir="compose/${APP}" \
+	--context-dir="compose/ogs-tools-pgadmin" \
 	--strategy=docker \
 	--labels=app="${APP}"
 
