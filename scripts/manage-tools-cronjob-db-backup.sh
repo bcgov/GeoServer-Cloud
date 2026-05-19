@@ -4,10 +4,10 @@ set -euo pipefail
 # ----------------------------
 # Config
 # ----------------------------
-APP="ogs-cronjob-db-backup"
-TARGET_IMAGE="ogs-pgadmin:latest"
+APP="ogs-tools-cronjob-db-backup"
+TARGET_IMAGE="ogs-tools-pgadmin:latest"
 TARGET_SCRIPT="/scripts/backup-databases.sh"
-PVC_NAME="ogs-pgadmin-data"
+PVC_NAME="ogs-tools-pgadmin-data"
 
 # ----------------------------
 # Verify passed arg and show help if required
