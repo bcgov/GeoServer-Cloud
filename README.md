@@ -140,7 +140,7 @@ oc project <tools-project-id>
 
 #### 3. Add Secrets (use strong, unique passwords):
 ```bash
-oc create secret generic ogs-pgadmin \
+oc create secret generic ogs-tools-pgadmin \
   --from-literal=PGADMIN_EMAIL=admin@example.com \
   --from-literal=PGADMIN_PASSWORD=***password***
 ```
@@ -151,7 +151,13 @@ oc create secret generic ogs-pgadmin \
   - Review and confirm with 'Y'
 ```
 
-#### 5. Deploy Database Backup CronJobs per Project
+#### 5. Deploy the Reverse Proxy:
+```bash
+./scripts/manage-tools-rproxy.sh deploy
+  - Review and confirm with 'Y'
+```
+
+#### 6. Deploy Database Backup CronJobs per Project
 Replace [target-project-id] with the name of your Project you wish to run the database backup for (i.e. abc123-dev, abc123-test, or abc123-prod). Requires ogs-cronjob-schedules secret in each target project.
 ```bash
 ./scripts/manage-tools-cronjob-db-backup.sh deploy [target-project-id]

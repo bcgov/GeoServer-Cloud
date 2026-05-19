@@ -4,7 +4,7 @@ set -euo pipefail
 # ----------------------------
 # Config
 # ----------------------------
-APP="ogs-pgadmin"
+APP="ogs-tools-pgadmin"
 REPO="https://github.com/bcgov/GeoServer-Cloud.git"
 PVC_SIZE="10Gi"
 
@@ -128,7 +128,7 @@ oc import-image debian:trixie-slim \
 echo ">>> Creating/updating BuildConfig..."
 oc new-build "$REPO" \
 	--name="${APP}" \
-	--context-dir="compose/ogs-tools-pgadmin" \
+  --context-dir="compose/${APP}" \
 	--strategy=docker \
 	--labels=app="${APP}"
 
@@ -157,8 +157,8 @@ oc patch deployment "${APP}" --type=json -p='[
 # Inject runtime variables
 # ----------------------------
 oc set env deployment/"${APP}" \
-    PGADMIN_SETUP_EMAIL=$(oc get secret ogs-pgadmin -o jsonpath='{.data.PGADMIN_EMAIL}' | base64 --decode) \
-    PGADMIN_SETUP_PASSWORD=$(oc get secret ogs-pgadmin -o jsonpath='{.data.PGADMIN_PASSWORD}' | base64 --decode) \
+    PGADMIN_SETUP_EMAIL=$(oc get secret ogs-tools-pgadmin -o jsonpath='{.data.PGADMIN_EMAIL}' | base64 --decode) \
+    PGADMIN_SETUP_PASSWORD=$(oc get secret ogs-tools-pgadmin -o jsonpath='{.data.PGADMIN_PASSWORD}' | base64 --decode) \
     POSTGRES_PASSWORD=$(oc get secret ogs-postgresql-cluster-pguser-postgres -o jsonpath='{.data.password}' | base64 --decode)
 
 # ----------------------------
