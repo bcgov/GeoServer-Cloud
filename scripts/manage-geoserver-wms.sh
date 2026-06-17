@@ -5,7 +5,7 @@ set -euo pipefail
 # Config
 # ----------------------------
 APP="ogs-geoserver-wms"
-IMAGE="docker.io/geoservercloud/geoserver-cloud-wms:2.28.2.4"
+IMAGE="docker.io/geoservercloud/geoserver-cloud-wms:2.28.4.0"
 
 # ----------------------------
 # Verify passed arg and show help if required
