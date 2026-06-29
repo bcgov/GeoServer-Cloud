@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
 	rsync \
 	ssh \
 	nano \
+	iputils-ping \
+	nmap \
 	tzdata \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 	
