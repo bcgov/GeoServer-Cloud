@@ -5,7 +5,7 @@ set -euo pipefail
 # Config
 # ----------------------------
 APP="ogs-geoserver-gateway"
-IMAGE="docker.io/geoservercloud/geoserver-cloud-gateway:2.28.4.0"
+IMAGE="docker.io/geoservercloud/geoserver-cloud-gateway:3.0.1.1"
 
 # ----------------------------
 # Verify passed arg and show help if required

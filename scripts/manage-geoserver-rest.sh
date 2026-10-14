@@ -5,7 +5,7 @@ set -euo pipefail
 # Config
 # ----------------------------
 APP="ogs-geoserver-rest"
-IMAGE="docker.io/geoservercloud/geoserver-cloud-rest:2.28.4.0"
+IMAGE="docker.io/geoservercloud/geoserver-cloud-rest:3.0.1.1"
 
 # ----------------------------
 # Verify passed arg and show help if required
@@ -79,6 +79,7 @@ oc label deployment "${APP}" app="${APP}" --overwrite
 oc set env deployment/"${APP}" \
     GEOSERVER_ADMIN_USERNAME=$(oc get secret ogs-geoserver -o jsonpath='{.data.GEOSERVER_ADMIN_USER}' | base64 --decode) \
     GEOSERVER_ADMIN_PASSWORD=$(oc get secret ogs-geoserver -o jsonpath='{.data.GEOSERVER_ADMIN_PASSWORD}' | base64 --decode) \
+	GWC_CACHEDIRECTORY=/tmp/gwc \
 	LOGGING_LEVEL_ORG_GEOSERVER=INFO \
 	PGCONFIG_HOST=$(oc get secret ogs-postgresql-cluster-pguser-ogs-config-user -o jsonpath='{.data.pgbouncer-host}' | base64 --decode) \
 	PGCONFIG_PORT=$(oc get secret ogs-postgresql-cluster-pguser-ogs-config-user -o jsonpath='{.data.pgbouncer-port}' | base64 --decode) \
