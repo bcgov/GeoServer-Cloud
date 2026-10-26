@@ -164,6 +164,10 @@ Replace [target-project-id] with the name of your Project you wish to run the da
   - Review and confirm with 'Y'
 ```
 
+The deployment script creates the CronJob suspended, with scheduling settings and storage configured, and enables it only after credentials are successfully added. If setup fails, correct the error and rerun deployment; do not manually enable an incompletely configured CronJob.
+
+The backup script attempts all databases and exits nonzero if any dump fails, so the Job reports failure. Dumps are written to `.partial` files and renamed to `.dump` only after successful completion. Retention cleanup runs only when all dumps succeed; otherwise existing backups are preserved.
+
 ## Start adding tables, data, layers, security, etc.
 
 The following endpoints are available to build your own custom setup:

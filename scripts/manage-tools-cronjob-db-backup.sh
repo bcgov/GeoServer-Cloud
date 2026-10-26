@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Create backups suspended; enable scheduling only after configuration succeeds.
+# A failed setup leaves the CronJob suspended. Correct the error and rerun deploy.
 set -euo pipefail
 
 # ----------------------------
@@ -91,62 +93,64 @@ if [[ "${ACTION}" == "remove" ]]; then
 fi
 
 # ----------------------------
-# Set cronjob
+# Create suspended cronjob with scheduling and storage configured
 # ----------------------------
-echo ">>> Creating cronjob..."
-oc create cronjob "${APP}" \
-  --schedule="${SCHEDULE}" \
-  --image=image-registry.openshift-image-registry.svc:5000/"${PROJ}"/"${TARGET_IMAGE}" \
-  -- /bin/bash -c "${TARGET_SCRIPT}"
-oc label cronjob "${APP}" app="${APP}" --overwrite
+echo ">>> Creating suspended cronjob..."
+oc apply -f - <<EOF
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ${APP}
+  labels:
+    app: ${APP}
+spec:
+  suspend: true
+  schedule: "${SCHEDULE}"
+  timeZone: America/Los_Angeles
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: ${APP}
+              image: image-registry.openshift-image-registry.svc:5000/${PROJ}/${TARGET_IMAGE}
+              command: ["/bin/bash", "-c", "${TARGET_SCRIPT}"]
+              volumeMounts:
+                - name: ${PVC_NAME}
+                  mountPath: /var/lib/pgadmin
+          volumes:
+            - name: ${PVC_NAME}
+              persistentVolumeClaim:
+                claimName: ${PVC_NAME}
+EOF
 
-# ----------------------------
-# Set cronjob to PST
-# ----------------------------
-oc patch cronjob "${APP}" --type=merge -p '{
-  "spec": {
-    "timeZone": "America/Los_Angeles"
-  }
-}'
-
-# ----------------------------
-# Set cronjob limits
-# ----------------------------
-oc patch cronjob "${APP}" --type=merge -p '{
-  "spec":{
-    "successfulJobsHistoryLimit":1,
-    "failedJobsHistoryLimit":1,
-    "concurrencyPolicy":"Forbid",
-    "jobTemplate":{
-      "spec":{
-        "template":{
-          "spec":{
-            "restartPolicy":"Never"
-          }
-        }
-      }
-    }
-  }
-}'
+trap 'echo ">>> ERROR: Backup setup failed; scheduling was not enabled. Inspect cronjob/${APP} before retrying." >&2' ERR
 
 # ----------------------------
 # Inject runtime variables
 # ----------------------------
+POSTGRES_HOST=$(oc get secret ogs-postgresql-cluster-pguser-postgres -n "${TARGET_NAMESPACE}" -o jsonpath='{.data.host}' | base64 --decode)
+POSTGRES_PASSWORD=$(oc get secret ogs-postgresql-cluster-pguser-postgres -n "${TARGET_NAMESPACE}" -o jsonpath='{.data.password}' | base64 --decode)
+if [[ -z "${POSTGRES_HOST}" || -z "${POSTGRES_PASSWORD}" ]]; then
+    echo ">>> ERROR: Backup host or password is empty; ${APP} remains suspended" >&2
+    exit 1
+fi
+
 oc set env cronjob/"${APP}" \
-	POSTGRES_HOST=$(oc get secret ogs-postgresql-cluster-pguser-postgres -n ${TARGET_NAMESPACE} -o jsonpath='{.data.host}' | base64 --decode) \
-	POSTGRES_PASSWORD=$(oc get secret ogs-postgresql-cluster-pguser-postgres -n ${TARGET_NAMESPACE} -o jsonpath='{.data.password}' | base64 --decode) \
-	PROJECT="${TARGET_NAMESPACE}"
+    POSTGRES_HOST="${POSTGRES_HOST}" \
+    POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+    PROJECT="${TARGET_NAMESPACE}"
 
 # ----------------------------
-# Attach PVC (same as pgAdmin)
+# Enable scheduling only after all configuration succeeds
 # ----------------------------
-echo ">>> Attaching PVC..."
-oc set volume cronjob/"${APP}" \
-    --add \
-    --name="${PVC_NAME}" \
-    --type=pvc \
-    --claim-name="${PVC_NAME}" \
-    --mount-path=/var/lib/pgadmin
+echo ">>> Enabling backup schedule..."
+oc patch cronjob "${APP}" --type=merge -p '{"spec":{"suspend":false}}'
+trap - ERR
 
 # ----------------------------
 # Final status

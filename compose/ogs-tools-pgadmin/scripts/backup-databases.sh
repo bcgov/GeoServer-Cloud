@@ -54,7 +54,7 @@ footer() {
     echo
 }
 
-trap 'EXIT_CODE=$?; footer' EXIT
+trap footer EXIT
 
 # -----------------------------
 # Export password for pg_dump
@@ -66,19 +66,27 @@ export PGPASSWORD="$DB_PASSWORD"
 # -----------------------------
 for DB_NAME in "${DATABASES[@]}"; do
     BACKUP_FILE="${BACKUP_DIR}/${DATESTAMP}_${DB_NAME}.dump"
+    PARTIAL_FILE="${BACKUP_FILE}.partial"
     echo
     echo "Backing up database '${DB_NAME}' to '${BACKUP_FILE}'..."
 
     # pg_dump with error handling
-    if ! pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -F c -Z 9 -f "${BACKUP_FILE}"; then
-        echo "Backup of '${DB_NAME}' failed!"
+    if ! pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -F c -Z 9 -f "${PARTIAL_FILE}"; then
+        echo "ERROR: Backup of '${DB_NAME}' failed!" >&2
         EXIT_CODE=1
+        rm -f "${PARTIAL_FILE}"
     else
+        mv "${PARTIAL_FILE}" "${BACKUP_FILE}"
         echo "Backup of '${DB_NAME}' successful."
         echo "To restore this backup:"
         echo " >>> pg_restore -h $DB_HOST -p $DB_PORT -U $DB_USER --clean --if-exists -d ${DB_NAME} -v ${BACKUP_FILE}"
     fi
 done
+
+if [[ "${EXIT_CODE}" -ne 0 ]]; then
+    echo "ERROR: One or more backups failed; skipping retention cleanup to preserve existing backups." >&2
+    exit "${EXIT_CODE}"
+fi
 
 # -----------------------------
 # Cleanup old backups
