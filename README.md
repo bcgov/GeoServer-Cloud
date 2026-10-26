@@ -176,6 +176,49 @@ User account details are available as secrets within:
 - ogs-postgresql-cluster-pguser-ogs-rw-user
 - ogs-postgresql-cluster-pguser-postgres
 
+## Restarting the Stack
+
+To restart existing deployments without rebuilding images or applying version changes, run [restart-rollouts.sh](scripts/restart-rollouts.sh) from the repository root:
+
+```bash
+oc project <your-project-id>
+bash scripts/restart-rollouts.sh
+```
+
+Review the selected project and restart order, then confirm with `Y`. The script checks that all seven deployments exist before requesting any restarts and waits for each rollout to finish in this order:
+
+1. RabbitMQ
+2. GeoServer WebUI
+3. GeoServer WFS
+4. GeoServer WMS
+5. GeoServer REST
+6. GeoServer Gateway
+7. Reverse proxy
+
+RabbitMQ restarts first so fresh GeoServer clients can recreate their subscriptions. The gateway and reverse proxy restart after the backends. Each deployment retains its existing rollout strategy.
+
+**Warning:** This is not a zero-downtime operation. Replacing the single, non-persistent RabbitMQ broker interrupts connections and can lose broker state/messages. WebUI sessions and in-flight requests may also be affected. Do not use a full-stack restart when only an individual application needs restarting.
+
+The script stops on the first failure or rollout timeout (10 minutes per deployment). Completed restarts are not undone, and an active rollout may continue after the script exits. After completion, verify WMS/WFS requests, the WebUI, and RabbitMQ queue consumers; pod readiness alone does not guarantee working event subscriptions.
+
+## Troubleshooting
+
+Search logs from all pods and containers in the currently selected OpenShift project for error-related keywords from the last 30 minutes:
+
+```bash
+oc get pods -o name | while IFS= read -r pod; do
+    echo "=== ${pod} ==="
+    oc logs "${pod}" \
+        --all-containers=true \
+        --prefix=true \
+        --since=30m \
+        --tail=-1 |
+        grep -iE 'error|exception|fatal|panic'
+done
+```
+
+Run this in Bash after selecting the project with `oc project <your-project-id>`. Adjust `--since=30m` as needed. This searches container stdout/stderr, not arbitrary log files inside containers, and keyword matches alone do not determine application health.
+
 ## Notes
 
 - Deployment order is critical, as some components rely on resources created by others.
@@ -207,4 +250,3 @@ User account details are available as secrets within:
 # License
 
 This project is licensed under the terms of the [LICENSE](LICENSE) file in this repository.
-
