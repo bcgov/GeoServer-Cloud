@@ -106,9 +106,8 @@ spec:
   strategy:
     type: Docker
     dockerStrategy:
-      from:
-        kind: DockerImage
-        name: docker.io/nginx:1.29
+      # Use the FROM image in the repository Dockerfile, not a separate override.
+      from: null
   output:
     to:
       kind: ImageStreamTag
