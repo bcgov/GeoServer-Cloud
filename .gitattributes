@@ -1,4 +1,6 @@
 *.sh text eol=lf
+scripts/geoserver-version.env text eol=lf
+compose/ogs-rproxy/nginx.conf text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 *.Dockerfile text eol=lf

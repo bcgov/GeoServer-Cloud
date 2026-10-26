@@ -8,4 +8,7 @@ RUN mkdir -p /var/cache/nginx/client_temp /run \
 
 EXPOSE 8080
 
+# Gracefully drain workers on pod termination rather than aborting requests.
+STOPSIGNAL SIGQUIT
+
 CMD ["nginx", "-g", "daemon off;"]

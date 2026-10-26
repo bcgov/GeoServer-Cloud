@@ -1,22 +1,39 @@
 #!/usr/bin/env bash
+# Manage the WebUI Deployment and its internal Service named webui.
+# Requires Bash, an authenticated oc CLI, the intended oc project, PostgreSQL,
+# RabbitMQ, and Secrets ogs-geoserver, ogs-rabbitmq, and
+# ogs-postgresql-cluster-pguser-ogs-config-user.
+#   ./scripts/manage-geoserver-webui.sh <deploy|remove>
+# The default image tag comes from the adjacent geoserver-version.env.
+#
+# deploy updates in place; remove leaves the shared catalog and Secrets intact.
+# Back up the catalog and verify mixed-version schema/event compatibility before
+# upgrading: PGCONFIG_INITIALIZE and Flyway settings can affect the shared DB.
+# Sessions are not replicated and may be lost when a WebUI pod is replaced.
 set -euo pipefail
 
 # ----------------------------
 # Config
 # ----------------------------
 APP="ogs-geoserver-webui"
-IMAGE="docker.io/geoservercloud/geoserver-cloud-webui:3.0.1.1"
+source "$(dirname "${BASH_SOURCE[0]}")/geoserver-version.env"
+VERSION="${GEOSERVER_CLOUD_VERSION}"
+IMAGE="docker.io/geoservercloud/geoserver-cloud-webui:${VERSION}"
 
 # ----------------------------
 # Verify passed arg and show help if required
 # ----------------------------
-OPTIONS=("deploy" "remove")
 ACTION="${1:-}"
-if [[ ! " ${OPTIONS[*]} " =~ " ${ACTION} " ]]; then
-    echo
-    echo "USAGE: $(basename "$0") <${OPTIONS[*]// /|}>"
-    echo "EXAMPLE: $(basename "$0") ${OPTIONS[0]}"
-    echo
+case "${ACTION}" in
+    deploy|remove) ;;
+    *)
+        echo "USAGE: $(basename "$0") <deploy|remove>" >&2
+        exit 1
+        ;;
+esac
+
+if [[ ! "${VERSION}" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
+    echo ">>> ERROR: GEOSERVER_CLOUD_VERSION must be a valid image tag" >&2
     exit 1
 fi
 
@@ -33,6 +50,7 @@ echo "========================================"
 echo " Action:            ${ACTION}"
 echo " App:               ${APP}"
 echo " Project:           ${PROJ}"
+echo " Image:             ${IMAGE}"
 echo "========================================"
 echo
 read -r -p "Continue? [y/N]: " CONFIRM
@@ -47,83 +65,216 @@ case "${CONFIRM:-N}" in
 esac
 
 # ----------------------------
-# Cleanup
-# ----------------------------
-echo ">>> Removing old ${APP} resources..."
-[[ "${ACTION}" == "remove" ]] && oc delete service -l app="${APP}" --ignore-not-found --wait=true
-oc delete deployment -l app="${APP}" --ignore-not-found --wait=true
-
-# ----------------------------
-# Stop here if remove was requested
+# Remove resources only when explicitly requested
 # ----------------------------
 if [[ "${ACTION}" == "remove" ]]; then
+    oc delete service webui --ignore-not-found --wait=true
+    oc delete deployment "${APP}" --ignore-not-found --wait=true
     echo ""
     echo ">>> Remove completed successfully"
     echo ""
-    exit
+    exit 0
 fi
 
 # ----------------------------
-# Create deployment
+# Apply the complete configuration without deleting running resources
 # ----------------------------
-echo ">>> Creating deployment..."
-oc create deployment "${APP}" \
-    --image="${IMAGE}" \
-    --dry-run=client -o yaml | oc apply -f -
-oc label deployment "${APP}" app="${APP}" --overwrite
-
-# ----------------------------
-# Inject runtime variables
-# ----------------------------
-oc set env deployment/"${APP}" \
-    GEOSERVER_ADMIN_USERNAME=$(oc get secret ogs-geoserver -o jsonpath='{.data.GEOSERVER_ADMIN_USER}' | base64 --decode) \
-    GEOSERVER_ADMIN_PASSWORD=$(oc get secret ogs-geoserver -o jsonpath='{.data.GEOSERVER_ADMIN_PASSWORD}' | base64 --decode) \
-	GWC_CACHEDIRECTORY=/tmp/gwc \
-	LOGGING_LEVEL_ORG_GEOSERVER=INFO \
-	PGCONFIG_HOST=$(oc get secret ogs-postgresql-cluster-pguser-ogs-config-user -o jsonpath='{.data.pgbouncer-host}' | base64 --decode) \
-	PGCONFIG_PORT=$(oc get secret ogs-postgresql-cluster-pguser-ogs-config-user -o jsonpath='{.data.pgbouncer-port}' | base64 --decode) \
-	PGCONFIG_DATABASE=$(oc get secret ogs-postgresql-cluster-pguser-ogs-config-user -o jsonpath='{.data.dbname}' | base64 --decode) \
-	PGCONFIG_USERNAME=$(oc get secret ogs-postgresql-cluster-pguser-ogs-config-user -o jsonpath='{.data.user}' | base64 --decode) \
-	PGCONFIG_PASSWORD=$(oc get secret ogs-postgresql-cluster-pguser-ogs-config-user -o jsonpath='{.data.password}' | base64 --decode) \
-	PGCONFIG_SCHEMA=public \
-	PGCONFIG_INITIALIZE=true \
-	SPRING_PROFILES_ACTIVE="standalone,pgconfig,eventbus-rabbit" \
-	SPRING_CLOUD_BUS_ENABLED=true \
-	SPRING_RABBITMQ_HOST=ogs-rabbitmq \
-	SPRING_RABBITMQ_PORT=5672 \
-	SPRING_RABBITMQ_USERNAME=$(oc get secret ogs-rabbitmq -o jsonpath='{.data.RABBITMQ_DEFAULT_USER}' | base64 --decode) \
-	SPRING_RABBITMQ_PASSWORD=$(oc get secret ogs-rabbitmq -o jsonpath='{.data.RABBITMQ_DEFAULT_PASS}' | base64 --decode) \
-	SPRING_RABBITMQ_REQUESTED_HEARTBEAT=30 \
-	SPRING_RABBITMQ_CONNECTION_TIMEOUT=10000 \
-	SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_ENABLED=true \
-	SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_ATTEMPTS=20 \
-	SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_INITIAL_INTERVAL=10000 \
-	SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER=1.5 \
-	CATALINA_OPTS="-DALLOW_ENV_PARAMETRIZATION=true" \
-    JAVA_OPTS="-Xms384m -Xmx768m -XX:+UseG1GC -XX:MaxGCPauseMillis=200" \
-	FLYWAY_BASELINE_ON_MIGRATE=true
-
-# ----------------------------
-# Set resources
-# ----------------------------
-oc set resources deployment/"${APP}" --limits=cpu=300m,memory=1.25Gi --requests=cpu=150m,memory=1Gi
+echo ">>> Applying ${APP} configuration..."
+oc apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP}
+  labels:
+    app: ${APP}
+spec:
+  # One steady-state pod, with capacity for a second during rolling replacement.
+  replicas: 1
+  revisionHistoryLimit: 3
+  minReadySeconds: 15
+  progressDeadlineSeconds: 900
+  strategy:
+    # Keep the old pod until the replacement has been ready for 15 seconds.
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ${APP}
+  template:
+    metadata:
+      labels:
+        app: ${APP}
+    spec:
+      # Budget for the 15-second preStop delay plus the 90-second shutdown phase.
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: geoserver-cloud-webui
+          image: "${IMAGE}"
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 8081
+          # null clears old literal values when adopting secretKeyRef via apply.
+          # Secret updates require pod recreation; unchanged apply will not restart.
+          env:
+            - name: GEOSERVER_ADMIN_USERNAME
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-geoserver
+                  key: GEOSERVER_ADMIN_USER
+            - name: GEOSERVER_ADMIN_PASSWORD
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-geoserver
+                  key: GEOSERVER_ADMIN_PASSWORD
+            - name: GWC_CACHEDIRECTORY
+              value: "/tmp/gwc"
+            - name: LOGGING_LEVEL_ORG_GEOSERVER
+              value: "INFO"
+            - name: PGCONFIG_HOST
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-postgresql-cluster-pguser-ogs-config-user
+                  key: pgbouncer-host
+            - name: PGCONFIG_PORT
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-postgresql-cluster-pguser-ogs-config-user
+                  key: pgbouncer-port
+            - name: PGCONFIG_DATABASE
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-postgresql-cluster-pguser-ogs-config-user
+                  key: dbname
+            - name: PGCONFIG_USERNAME
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-postgresql-cluster-pguser-ogs-config-user
+                  key: user
+            - name: PGCONFIG_PASSWORD
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-postgresql-cluster-pguser-ogs-config-user
+                  key: password
+            - name: PGCONFIG_SCHEMA
+              value: "public"
+            - name: PGCONFIG_INITIALIZE
+              value: "true"
+            - name: SPRING_PROFILES_ACTIVE
+              value: "standalone,pgconfig,eventbus-rabbit"
+            - name: SPRING_CLOUD_BUS_ENABLED
+              value: "true"
+            - name: SPRING_RABBITMQ_HOST
+              value: "ogs-rabbitmq"
+            - name: SPRING_RABBITMQ_PORT
+              value: "5672"
+            - name: SPRING_RABBITMQ_USERNAME
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-rabbitmq
+                  key: RABBITMQ_DEFAULT_USER
+            - name: SPRING_RABBITMQ_PASSWORD
+              value: null
+              valueFrom:
+                secretKeyRef:
+                  name: ogs-rabbitmq
+                  key: RABBITMQ_DEFAULT_PASS
+            - name: SPRING_RABBITMQ_REQUESTED_HEARTBEAT
+              value: "30"
+            - name: SPRING_RABBITMQ_CONNECTION_TIMEOUT
+              value: "10000"
+            - name: SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_ENABLED
+              value: "true"
+            - name: SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MAX_ATTEMPTS
+              value: "20"
+            - name: SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_INITIAL_INTERVAL
+              value: "10000"
+            - name: SPRING_RABBITMQ_LISTENER_SIMPLE_RETRY_MULTIPLIER
+              value: "1.5"
+            - name: CATALINA_OPTS
+              value: "-DALLOW_ENV_PARAMETRIZATION=true"
+            - name: JAVA_OPTS
+              value: "-Xms384m -Xmx768m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+            - name: FLYWAY_BASELINE_ON_MIGRATE
+              value: "true"
+            - name: SERVER_SHUTDOWN
+              value: "graceful"
+            - name: SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE
+              value: "90s"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "8081"
+            - name: MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED
+              value: "true"
+          resources:
+            limits:
+              cpu: 300m
+              memory: 1.25Gi
+            requests:
+              cpu: 150m
+              memory: 1Gi
+          # Startup allows roughly 10 minutes before readiness/liveness take over.
+          # Verify the target image serves these endpoints on management port 8081.
+          # The Service excludes this port; pod-level access depends on policies.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: management
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              # Allow endpoint removal to propagate before SIGTERM; requires sh/sleep.
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webui
+  labels:
+    app: ${APP}
+spec:
+  selector:
+    app: ${APP}
+  ports:
+    - port: 8080
+      targetPort: 8080
+EOF
 
 # ----------------------------
 # Rollout
 # ----------------------------
+# A timeout does not cancel the rollout or undo any catalog migration.
 echo ">>> Waiting for deployment rollout..."
-oc rollout status deployment/"${APP}" --timeout=300s
-
-# ----------------------------
-# Expose internal service
-# ----------------------------
-if ! oc get service "${APP}" &>/dev/null; then
-    echo ">>> Creating internal service..."
-    oc expose deployment "${APP}" \
-      --name=webui \
-      --port=8080 \
-      --labels=app="${APP}" \
-      --dry-run=client -o yaml | oc apply -f -
+if ! oc rollout status deployment/"${APP}" --timeout=900s; then
+    echo ">>> ERROR: ${APP} rollout failed; inspect pods, events, and logs before continuing" >&2
+    exit 1
 fi
 
 # ----------------------------
