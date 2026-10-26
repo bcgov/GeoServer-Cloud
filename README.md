@@ -175,6 +175,10 @@ The following endpoints are available to build your own custom setup:
 - **RabbitMQ Management:** `https://ogs-[project-name].apps.silver.devops.gov.bc.ca/rabbitmq/`
 - **PgAdmin Web:** `https://ogs-[tools-project-name].apps.silver.devops.gov.bc.ca/pgadmin/`
 
+The public reverse proxy restricts `/web` and `/web/` child paths to client IP ranges `142.34.53.0/24`, `142.22.0.0/15`, `142.24.0.0/13`, and `142.32.0.0/13`; other clients receive HTTP 403. WMS/WFS paths remain unchanged. This is a network restriction, not user authentication, and does not restrict REST or RabbitMQ administration.
+
+The restriction depends on trusted client-IP forwarding from the OpenShift router. The current Nginx configuration trusts `X-Forwarded-For` from `10.0.0.0/8`; validate the router's header handling and prevent untrusted direct access to the proxy before relying on this as an access boundary. Test `/web` and `/web/` from both allowed and disallowed networks, including a disallowed request with a forged allowed `X-Forwarded-For` address. Rebuild the proxy from the updated Git source to activate configuration changes.
+
 User account details are available as secrets within:
 - ogs-postgresql-cluster-pguser-ogs-ro-user
 - ogs-postgresql-cluster-pguser-ogs-rw-user
